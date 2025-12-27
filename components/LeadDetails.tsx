@@ -70,19 +70,27 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return 'Not Set';
-    return new Date(dateStr).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    try {
+      return new Date(dateStr).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    } catch (e) {
+      return 'Invalid Date';
+    }
   };
 
   const getInputDateFormat = (dateStr: string | null) => {
     if (!dateStr) return '';
-    const date = new Date(dateStr);
-    return date.toISOString().slice(0, 16);
+    try {
+      const date = new Date(dateStr);
+      return date.toISOString().slice(0, 16);
+    } catch (e) {
+      return '';
+    }
   };
 
   return (
@@ -91,12 +99,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
       <div className="p-6 border-b border-slate-100 flex items-center justify-between shadow-sm shrink-0">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl uppercase">
-            {lead.userName?.charAt(0) || '?'}
+            {(lead?.userName || '?').charAt(0)}
           </div>
-          <div>
-            <h2 className="text-lg font-bold text-slate-800 truncate max-w-[120px]">{lead.userName}</h2>
+          <div className="text-left overflow-hidden">
+            <h2 className="text-lg font-bold text-slate-800 truncate max-w-[120px]">{lead?.userName || 'Unknown'}</h2>
             <p className="text-xs text-slate-500 flex items-center gap-1">
-              <Icons.Phone className="w-3 h-3" /> {lead.userNumber}
+              <Icons.Phone className="w-3 h-3" /> {lead?.userNumber}
             </p>
           </div>
         </div>
@@ -149,12 +157,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
       {/* Content */}
       <div className="flex-1 overflow-y-auto bg-white p-6">
         {activeTab === 'info' && (
-          <div className="space-y-6">
+          <div className="space-y-6 text-left">
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Lead Status</label>
                 <select
-                  value={lead.status}
+                  value={lead?.status || 'Cold'}
                   onChange={(e) => handleFieldUpdate('status', e.target.value)}
                   className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
                 >
@@ -166,7 +174,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
                 <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Pipeline Stage</label>
                 <select
-                  value={lead.pipeline}
+                  value={lead?.pipeline || 'New'}
                   onChange={(e) => handleFieldUpdate('pipeline', e.target.value)}
                   className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
                 >
@@ -182,7 +190,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
                   <Icons.Calendar className="w-5 h-5 text-blue-500" />
                   <input
                     type="datetime-local"
-                    value={getInputDateFormat(lead.reminder)}
+                    value={getInputDateFormat(lead?.reminder)}
                     onChange={(e) => handleFieldUpdate('reminder', e.target.value)}
                     className="bg-white border border-slate-200 rounded px-2 py-1 text-sm text-slate-700 w-full"
                   />
@@ -191,7 +199,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
                 <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Assigned To</label>
                 <select
-                  value={lead.assignedto || ''}
+                  value={lead?.assignedto || ''}
                   onChange={(e) => handleAssign(e.target.value)}
                   className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
                 >
@@ -208,19 +216,19 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
               <div className="grid grid-cols-2 gap-y-4 text-sm">
                 <div>
                   <p className="text-slate-400">Course</p>
-                  <p className="font-medium">{lead.course || 'N/A'}</p>
+                  <p className="font-medium truncate">{lead?.course || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-slate-400">Source</p>
-                  <p className="font-medium">{lead.leadfrom}</p>
+                  <p className="font-medium truncate">{lead?.leadfrom || 'Manual'}</p>
                 </div>
                 <div>
                   <p className="text-slate-400">Profession</p>
-                  <p className="font-medium">{lead.profession || 'N/A'}</p>
+                  <p className="font-medium truncate">{lead?.profession || 'N/A'}</p>
                 </div>
                 <div>
                   <p className="text-slate-400">Location</p>
-                  <p className="font-medium">{lead.location || 'N/A'}</p>
+                  <p className="font-medium truncate">{lead?.location || lead?.city || 'N/A'}</p>
                 </div>
               </div>
             </div>
@@ -228,14 +236,14 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
         )}
 
         {activeTab === 'chat' && (
-          <div className="space-y-6">
-            {lead.conversations.length === 0 ? (
+          <div className="space-y-6 text-left">
+            {(!lead?.conversations || lead?.conversations.length === 0) ? (
               <div className="flex flex-col items-center justify-center h-64 text-slate-400 italic">
                 <Icons.Chat className="w-12 h-12 mb-2 opacity-20" />
                 <p>No chat history available</p>
               </div>
             ) : (
-              lead.conversations.map((chat, idx) => (
+              lead?.conversations.map((chat, idx) => (
                 <div key={idx} className="space-y-3 pb-6 border-b border-slate-50 last:border-0">
                   <div className="flex flex-col items-end gap-1">
                     <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-none text-sm max-w-[85%] shadow-sm">
@@ -245,7 +253,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
                   </div>
                   <div className="flex flex-col items-start gap-1">
                     <div className="bg-slate-100 text-slate-700 px-4 py-2 rounded-2xl rounded-tl-none text-sm max-w-[85%] shadow-sm border border-slate-200">
-                      {chat.botReply.split('\n').map((line, i) => (
+                      {(chat.botReply || '').split('\n').map((line, i) => (
                         <p key={i} className={line.startsWith('ℹ️') || line.startsWith('🎓') || line.startsWith('💼') || line.startsWith('💰') ? 'mt-2 font-semibold' : ''}>
                           {line}
                         </p>
@@ -260,7 +268,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
         )}
 
         {activeTab === 'remarks' && (
-          <div className="flex flex-col h-full gap-6">
+          <div className="flex flex-col h-full gap-6 text-left">
             <div className="flex gap-2">
               <input
                 type="text"
@@ -279,7 +287,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
             </div>
 
             <div className="space-y-4">
-              {lead.remarks.length === 0 ? (
+              {(!lead?.remarks || lead?.remarks.length === 0) ? (
                 <div className="text-center text-slate-400 py-12 italic">
                   No remarks yet.
                 </div>
@@ -304,12 +312,12 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
         )}
       </div>
 
-      {/* Footer Close Button */}
       <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0">
         <button 
           onClick={onClose}
-          className="w-full py-2.5 bg-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-300 transition-all active:scale-95"
+          className="w-full py-2.5 bg-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-300 transition-all active:scale-95 flex items-center justify-center gap-2"
         >
+          <Icons.X className="w-4 h-4" />
           Cancel / Close Details
         </button>
       </div>
