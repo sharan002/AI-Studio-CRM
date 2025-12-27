@@ -1,45 +1,55 @@
 
 import React, { useState } from 'react';
-import { Lead, User, Remark } from '../types';
+import { Lead, User } from '../types';
 import { Icons } from './Icons';
 import { apiService } from '../services/api';
 
 interface LeadDetailsProps {
   lead: Lead;
   users: User[];
+  currentUserRole?: string;
   onUpdate: (updatedLead: Lead) => void;
   onDelete: (id: string) => void;
   onEdit: (lead: Lead) => void;
   onClose: () => void;
 }
 
-const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDelete, onEdit, onClose }) => {
+const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, currentUserRole, onUpdate, onDelete, onEdit, onClose }) => {
   const [activeTab, setActiveTab] = useState<'info' | 'chat' | 'remarks'>('info');
-  const [newRemark, setNewRemark] = useState('');
   const [loading, setLoading] = useState(false);
+  const [newRemark, setNewRemark] = useState('');
+  const isAdmin = currentUserRole === 'admin';
+
+  const parseMongoDate = (date: any): string => {
+    if (!date) return '';
+    if (typeof date === 'string') return date;
+    if (date.$date) return date.$date;
+    return '';
+  };
 
   const handleAssign = async (username: string) => {
+    if (!isAdmin) return;
     try {
       setLoading(true);
       const updated = await apiService.updateLead({ _id: lead._id, assignedto: username });
       onUpdate(updated);
-    } catch (err) {
-      alert('Failed to assign lead');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert('Assignment failed'); } finally { setLoading(false); }
   };
 
-  const handleFieldUpdate = async (field: keyof Lead, value: any) => {
+  const handleStatusChange = async (status: string) => {
     try {
       setLoading(true);
-      const updated = await apiService.updateLead({ _id: lead._id, [field]: value });
+      const updated = await apiService.updateLead({ _id: lead._id, status });
       onUpdate(updated);
-    } catch (err) {
-      alert(`Failed to update ${field}`);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert('Status update failed'); } finally { setLoading(false); }
+  };
+
+  const handleReminderChange = async (date: string) => {
+    try {
+      setLoading(true);
+      const updated = await apiService.updateLead({ _id: lead._id, reminder: date || null });
+      onUpdate(updated);
+    } catch (err) { alert('Reminder update failed'); } finally { setLoading(false); }
   };
 
   const handleAddRemark = async () => {
@@ -49,11 +59,7 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
       const updated = await apiService.addRemark(lead._id, newRemark);
       onUpdate(updated);
       setNewRemark('');
-    } catch (err) {
-      alert('Failed to add remark');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert('Failed to add remark'); } finally { setLoading(false); }
   };
 
   const handleDeleteRemark = async (remarkId: string) => {
@@ -61,205 +67,130 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
       setLoading(true);
       const updated = await apiService.deleteRemark(lead._id, remarkId);
       onUpdate(updated);
-    } catch (err) {
-      alert('Failed to delete remark');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { alert('Failed to delete remark'); } finally { setLoading(false); }
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'Not Set';
-    try {
-      return new Date(dateStr).toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    } catch (e) {
-      return 'Invalid Date';
-    }
-  };
-
-  const getInputDateFormat = (dateStr: string | null) => {
-    if (!dateStr) return '';
-    try {
-      const date = new Date(dateStr);
-      return date.toISOString().slice(0, 16);
-    } catch (e) {
-      return '';
-    }
+  const formatDate = (date: any) => {
+    const d = parseMongoDate(date);
+    if (!d) return 'N/A';
+    return new Date(d).toLocaleString();
   };
 
   return (
-    <div className="flex flex-col h-full bg-white border-l border-slate-200 animate-in slide-in-from-right duration-300">
-      {/* Header */}
-      <div className="p-6 border-b border-slate-100 flex items-center justify-between shadow-sm shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xl uppercase">
-            {(lead?.userName || '?').charAt(0)}
+    <div className="flex flex-col h-full bg-white border rounded-2xl shadow-lg overflow-hidden text-left animate-in slide-in-from-right duration-300">
+      <div className="p-4 border-b bg-slate-50 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-lg uppercase">
+            {lead.userName.charAt(0)}
           </div>
-          <div className="text-left overflow-hidden">
-            <h2 className="text-lg font-bold text-slate-800 truncate max-w-[120px]">{lead?.userName || 'Unknown'}</h2>
-            <p className="text-xs text-slate-500 flex items-center gap-1">
-              <Icons.Phone className="w-3 h-3" /> {lead?.userNumber}
-            </p>
+          <div className="overflow-hidden">
+            <h2 className="font-bold text-slate-800 truncate max-w-[120px]">{lead.userName}</h2>
+            <p className="text-[10px] text-slate-500 font-medium">{lead.userNumber}</p>
           </div>
         </div>
         <div className="flex gap-1">
-          <button 
-            onClick={() => onEdit(lead)} 
-            title="Edit Lead"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 transition-colors"
-          >
-            <Icons.Edit className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={() => onDelete(lead._id)} 
-            title="Delete Lead"
-            className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors"
-          >
-            <Icons.Trash className="w-5 h-5" />
-          </button>
-          <button 
-            onClick={onClose} 
-            title="Close Panel"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-800 transition-colors"
-          >
-            <Icons.X className="w-5 h-5" />
-          </button>
+          <button onClick={() => onEdit(lead)} className="p-2 hover:bg-white rounded-lg text-slate-600 transition-colors" title="Edit"><Icons.Edit className="w-4 h-4" /></button>
+          {isAdmin && <button onClick={() => onDelete(lead._id)} className="p-2 hover:bg-red-50 rounded-lg text-red-500 transition-colors" title="Delete"><Icons.Trash className="w-4 h-4" /></button>}
+          <button onClick={onClose} className="p-2 hover:bg-white rounded-lg text-slate-400 transition-colors" title="Close"><Icons.X className="w-4 h-4" /></button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex border-b border-slate-100 bg-slate-50/50 shrink-0">
+      <div className="flex border-b bg-slate-50/50">
         {[
-          { id: 'info', label: 'Lead Info' },
-          { id: 'chat', label: 'Chat' },
-          { id: 'remarks', label: 'Remarks' },
-        ].map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
-            className={`flex-1 py-3 text-sm font-semibold transition-all border-b-2 ${
-              activeTab === tab.id
-                ? 'border-blue-600 text-blue-600 bg-white'
-                : 'border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-100'
-            }`}
+          { id: 'info', label: 'Info' },
+          { id: 'chat', label: 'History' },
+          { id: 'remarks', label: 'Remarks' }
+        ].map(t => (
+          <button 
+            key={t.id} 
+            onClick={() => setActiveTab(t.id as any)} 
+            className={`flex-1 py-3 text-[11px] font-bold uppercase tracking-wider transition-all ${activeTab === t.id ? 'border-b-2 border-blue-600 text-blue-600 bg-white' : 'text-slate-500 hover:text-slate-700'}`}
           >
-            {tab.label}
+            {t.label}
           </button>
         ))}
       </div>
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto bg-white p-6">
+      <div className="flex-1 overflow-y-auto p-4 space-y-6">
         {activeTab === 'info' && (
-          <div className="space-y-6 text-left">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Lead Status</label>
-                <select
-                  value={lead?.status || 'Cold'}
-                  onChange={(e) => handleFieldUpdate('status', e.target.value)}
-                  className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
-                >
-                  <option value="Hot">Hot</option>
-                  <option value="Warm">Warm</option>
-                  <option value="Cold">Cold</option>
-                </select>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Pipeline Stage</label>
-                <select
-                  value={lead?.pipeline || 'New'}
-                  onChange={(e) => handleFieldUpdate('pipeline', e.target.value)}
-                  className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
-                >
-                  <option value="New">New</option>
-                  <option value="Contacted">Contacted</option>
-                  <option value="Asked Time">Asked Time</option>
-                  <option value="Not Interested">Not Interested</option>
-                </select>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
-                <label className="text-xs uppercase font-bold text-slate-400 tracking-wider block mb-2">Set Follow-up Reminder</label>
-                <div className="flex items-center gap-3">
-                  <Icons.Calendar className="w-5 h-5 text-blue-500" />
-                  <input
-                    type="datetime-local"
-                    value={getInputDateFormat(lead?.reminder)}
-                    onChange={(e) => handleFieldUpdate('reminder', e.target.value)}
-                    className="bg-white border border-slate-200 rounded px-2 py-1 text-sm text-slate-700 w-full"
-                  />
-                </div>
-              </div>
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 col-span-2">
-                <label className="text-xs uppercase font-bold text-slate-400 tracking-wider">Assigned To</label>
-                <select
-                  value={lead?.assignedto || ''}
-                  onChange={(e) => handleAssign(e.target.value)}
-                  className="w-full mt-1 bg-transparent text-sm font-semibold text-slate-700 focus:outline-none"
-                >
-                  <option value="">Unassigned</option>
-                  {users.map(u => (
-                    <option key={u._id} value={u.username}>{u.username}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
+          <div className="space-y-5">
+             <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Assigned Staff</label>
+               <select 
+                 disabled={!isAdmin} 
+                 value={lead.assignedto || ''} 
+                 onChange={e => handleAssign(e.target.value)} 
+                 className="w-full p-2.5 bg-slate-50 border rounded-xl text-sm font-semibold text-slate-700 disabled:opacity-50 focus:ring-2 focus:ring-blue-500 outline-none"
+               >
+                 <option value="">Unassigned</option>
+                 {users.map(u => <option key={u.username} value={u.username}>{u.username}</option>)}
+               </select>
+             </div>
 
-            <div className="space-y-4">
-              <h3 className="font-bold text-slate-800 border-b pb-2">Course Details</h3>
-              <div className="grid grid-cols-2 gap-y-4 text-sm">
-                <div>
-                  <p className="text-slate-400">Course</p>
-                  <p className="font-medium truncate">{lead?.course || 'N/A'}</p>
+             <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</label>
+                  <select 
+                    value={lead.status} 
+                    onChange={e => handleStatusChange(e.target.value)} 
+                    className="w-full p-2.5 bg-slate-50 border rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-blue-500 outline-none"
+                  >
+                    <option value="Hot">Hot</option>
+                    <option value="Warm">Warm</option>
+                    <option value="Cold">Cold</option>
+                  </select>
                 </div>
-                <div>
-                  <p className="text-slate-400">Source</p>
-                  <p className="font-medium truncate">{lead?.leadfrom || 'Manual'}</p>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Program Type</label>
+                  <div className="p-2.5 bg-slate-50 rounded-xl text-sm font-bold text-slate-700 border">{lead.programType || 'N/A'}</div>
                 </div>
-                <div>
-                  <p className="text-slate-400">Profession</p>
-                  <p className="font-medium truncate">{lead?.profession || 'N/A'}</p>
-                </div>
-                <div>
-                  <p className="text-slate-400">Location</p>
-                  <p className="font-medium truncate">{lead?.location || lead?.city || 'N/A'}</p>
-                </div>
-              </div>
-            </div>
+             </div>
+
+             <div className="space-y-1.5">
+               <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Follow-up Reminder</label>
+               <div className="relative">
+                 <input 
+                   type="datetime-local"
+                   value={lead.reminder ? new Date(parseMongoDate(lead.reminder)).toISOString().slice(0, 16) : ''}
+                   onChange={(e) => handleReminderChange(e.target.value)}
+                   className="w-full p-2.5 bg-blue-50/50 border border-blue-100 rounded-xl text-xs font-bold text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                 />
+                 <Icons.Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400 pointer-events-none" />
+               </div>
+             </div>
+
+             <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3">
+               <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Course of Interest</p>
+                 <p className="text-sm font-bold text-slate-800">{lead.course || 'General Enquiry'}</p>
+               </div>
+               <div>
+                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Source</p>
+                 <p className="text-sm font-semibold text-slate-600">{lead.leadfrom || 'Manual'}</p>
+               </div>
+             </div>
           </div>
         )}
 
         {activeTab === 'chat' && (
-          <div className="space-y-6 text-left">
-            {(!lead?.conversations || lead?.conversations.length === 0) ? (
-              <div className="flex flex-col items-center justify-center h-64 text-slate-400 italic">
-                <Icons.Chat className="w-12 h-12 mb-2 opacity-20" />
-                <p>No chat history available</p>
+          <div className="space-y-4">
+            {lead.conversations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-slate-400 italic text-xs">
+                <Icons.Chat className="w-10 h-10 mb-2 opacity-10" />
+                <p>No conversation history found</p>
               </div>
             ) : (
-              lead?.conversations.map((chat, idx) => (
-                <div key={idx} className="space-y-3 pb-6 border-b border-slate-50 last:border-0">
-                  <div className="flex flex-col items-end gap-1">
-                    <div className="bg-blue-600 text-white px-4 py-2 rounded-2xl rounded-tr-none text-sm max-w-[85%] shadow-sm">
-                      {chat.userMsg}
+              lead.conversations.map((c, i) => (
+                <div key={i} className="space-y-2 pb-3 border-b border-slate-50 last:border-0">
+                  <div className="flex flex-col items-end">
+                    <div className="bg-blue-600 text-white p-2.5 rounded-2xl rounded-tr-none text-xs max-w-[90%] shadow-sm leading-relaxed">
+                      {c.userMsg}
                     </div>
-                    <span className="text-[10px] text-slate-400">{formatDate(chat.timestamp)}</span>
                   </div>
-                  <div className="flex flex-col items-start gap-1">
-                    <div className="bg-slate-100 text-slate-700 px-4 py-2 rounded-2xl rounded-tl-none text-sm max-w-[85%] shadow-sm border border-slate-200">
-                      {(chat.botReply || '').split('\n').map((line, i) => (
-                        <p key={i} className={line.startsWith('ℹ️') || line.startsWith('🎓') || line.startsWith('💼') || line.startsWith('💰') ? 'mt-2 font-semibold' : ''}>
-                          {line}
-                        </p>
-                      ))}
+                  <div className="flex flex-col items-start">
+                    <div className="bg-slate-100 text-slate-700 p-2.5 rounded-2xl rounded-tl-none text-xs max-w-[90%] border border-slate-200 shadow-sm leading-relaxed">
+                      {(c.botReply || '').split('\n').map((l, j) => <p key={j} className="mb-1 last:mb-0">{l}</p>)}
                     </div>
-                    <span className="text-[10px] text-slate-400">AI Assistant</span>
                   </div>
                 </div>
               ))
@@ -268,41 +199,38 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
         )}
 
         {activeTab === 'remarks' && (
-          <div className="flex flex-col h-full gap-6 text-left">
+          <div className="space-y-4">
             <div className="flex gap-2">
-              <input
+              <input 
                 type="text"
-                placeholder="Add remark..."
+                placeholder="New remark..."
                 value={newRemark}
-                onChange={(e) => setNewRemark(e.target.value)}
-                className="flex-1 px-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={e => setNewRemark(e.target.value)}
+                className="flex-1 px-3 py-2 bg-slate-50 border rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500"
               />
-              <button
+              <button 
                 onClick={handleAddRemark}
                 disabled={!newRemark.trim() || loading}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                className="bg-blue-600 text-white p-2 rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
               >
                 <Icons.Plus className="w-5 h-5" />
               </button>
             </div>
-
-            <div className="space-y-4">
-              {(!lead?.remarks || lead?.remarks.length === 0) ? (
-                <div className="text-center text-slate-400 py-12 italic">
-                  No remarks yet.
-                </div>
+            <div className="space-y-2">
+              {lead.remarks.length === 0 ? (
+                <p className="text-center text-slate-400 text-xs italic py-10">No remarks yet</p>
               ) : (
-                [...lead.remarks].reverse().map((r) => (
-                  <div key={r._id} className="group flex justify-between gap-3 bg-slate-50 p-4 rounded-xl border border-slate-100 hover:border-blue-200 transition-all">
-                    <div className="space-y-1 flex-1">
-                      <p className="text-sm text-slate-700 font-medium">{r.remark}</p>
-                      <p className="text-[10px] text-slate-400 tracking-wider">{formatDate(r.timestamp)}</p>
+                [...lead.remarks].reverse().map(r => (
+                  <div key={r._id} className="group p-3 bg-slate-50 rounded-xl border border-slate-100 flex justify-between gap-3 items-start transition-all hover:border-blue-200">
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-slate-700 leading-normal">{r.remark}</p>
+                      <p className="text-[9px] text-slate-400 mt-1 font-bold">{formatDate(r.timestamp)}</p>
                     </div>
-                    <button
+                    <button 
                       onClick={() => handleDeleteRemark(r._id)}
                       className="p-1 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                     >
-                      <Icons.Trash className="w-4 h-4" />
+                      <Icons.Trash className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 ))
@@ -311,14 +239,10 @@ const LeadDetails: React.FC<LeadDetailsProps> = ({ lead, users, onUpdate, onDele
           </div>
         )}
       </div>
-
-      <div className="p-4 border-t border-slate-100 bg-slate-50 shrink-0">
-        <button 
-          onClick={onClose}
-          className="w-full py-2.5 bg-slate-200 text-slate-700 rounded-xl font-bold text-sm hover:bg-slate-300 transition-all active:scale-95 flex items-center justify-center gap-2"
-        >
-          <Icons.X className="w-4 h-4" />
-          Cancel / Close Details
+      
+      <div className="p-4 border-t bg-slate-50 shrink-0">
+        <button onClick={onClose} className="w-full py-2.5 bg-slate-200 text-slate-600 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-300 transition-all active:scale-[0.98]">
+          Close Details
         </button>
       </div>
     </div>
